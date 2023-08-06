@@ -46,7 +46,7 @@ defmodule StateMachine.Event do
   @spec trigger(Context.t(model), atom, any) :: Context.t(model) when model: var
   def trigger(ctx, event, payload \\ nil) do
     context = %{ctx | payload: payload, event: event}
-    with {_, %Event{} = e} <- {:event, Map.get(context.definition.events, event)},
+    with {_, %Event{} = e} <- {:event, Keyword.get(context.definition.events, event)},
       {_, %Transition{} = t} <- {:transition, find_transition(context, e)}
     do
       Transition.run(%{context | transition: t})

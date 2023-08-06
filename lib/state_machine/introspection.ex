@@ -21,7 +21,7 @@ defmodule StateMachine.Introspection do
   """
   @spec all_events(StateMachine.t(any)) :: list(atom)
   def all_events(sm) do
-    Map.keys(sm.events)
+    Keyword.keys(sm.events)
   end
 
   @doc """
@@ -30,7 +30,7 @@ defmodule StateMachine.Introspection do
   """
   @spec allowed_events(Context.t(any)) :: list(atom())
   def allowed_events(ctx) do
-    Map.values(ctx.definition.events)
+    Keyword.values(ctx.definition.events)
     |> Enum.filter(&Event.is_allowed?(ctx, &1))
     |> Enum.map(& &1.name)
   end

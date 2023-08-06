@@ -56,6 +56,9 @@ defmodule StateMachineDSLTest do
       end
     """
     cat = struct(Cat, %{name: "Bobik", custom: :asleep})
+
+    assert Cat.all_events() == [:wake, :wash, :give_a_mouse, :pet, :sing_a_lullaby]
+
     assert :wake in Cat.allowed_events(cat)
     wake_ctx = Cat.trigger_with_context(cat, :wake)
     assert wake_ctx.status == :done

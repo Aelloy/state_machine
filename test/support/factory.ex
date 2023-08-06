@@ -17,11 +17,11 @@ defmodule StateMachine.Factory do
         playing:  state_playing(),
         eating:   state_eating()
       },
-      events: %{
+      events: [
         wake:         event_wake(),
         give_a_mouse: event_give_a_mouse(),
         sing_lullaby: event_sing_lullaby()
-      }
+      ]
     }
   end
 
@@ -89,7 +89,7 @@ defmodule StateMachine.Factory do
 
   def event_sing_lullaby do
     %Event{
-      name: :wake,
+      name: :sing_lullaby,
       transitions: [
         %Transition{
           from: :awake,
