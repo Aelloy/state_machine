@@ -62,11 +62,11 @@ defmodule StateMachine do
   * With Ecto support activated every transition is wrapped in transaction
   * With Ecto support activated the Ecto.Type implementation is generated automatically
   """
-  alias StateMachine.{State, Event, Context}
+  alias StateMachine.{State, Context}
 
   @type t(m) :: %__MODULE__{
     states: %{optional(atom) => State.t(m)},
-    events: %{optional(atom) => Event.t(m)},
+    events: list(),
     field:  atom(),
     state_getter: (Context.t(m) -> atom()),
     state_setter: (Context.t(m), atom() -> Context.t(m)),
@@ -74,7 +74,7 @@ defmodule StateMachine do
   }
 
   defstruct states: %{},
-    events: %{},
+    events: [],
     field: :state,
     state_getter: &State.get/1,
     state_setter: &State.set/2,

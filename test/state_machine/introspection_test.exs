@@ -9,9 +9,9 @@ defmodule StateMachineIntrospectionTest do
         created: %State{name: :created},
         done: %State{name: :done}
       },
-      events: %{
+      events: [
         finish: %Event{name: :finish}
-      }
+      ]
     }
     {:ok, %{sm: sm}}
   end
@@ -27,8 +27,17 @@ defmodule StateMachineIntrospectionTest do
     assert :finish in events
   end
 
+  test "all events follow by defined order" do
+    assert Introspection.all_events(machine_cat()) == [:wake, :give_a_mouse, :sing_lullaby]
+  end
+
   test "allowed_events" do
     ctx = Context.build(machine_cat(), %Cat{state: :asleep})
     assert :wake in Introspection.allowed_events(ctx)
+  end
+
+  test "allowed events follow by defined order" do
+    ctx = Context.build(machine_cat(), %Cat{state: :asleep})
+    assert Introspection.allowed_events(ctx) == [:wake, :sing_lullaby]
   end
 end

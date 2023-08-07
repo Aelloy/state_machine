@@ -59,8 +59,8 @@ defmodule StateMachine.DSL do
           Map.put(acc, state.name, state)
         end)
 
-        events = @events |> Enum.reverse |> Enum.reduce(%{}, fn event, acc ->
-          Map.put(acc, event.name, event)
+        events = @events |> Enum.reduce([], fn event, acc ->
+          Keyword.put(acc, event.name, event)
         end)
 
         field = @field
