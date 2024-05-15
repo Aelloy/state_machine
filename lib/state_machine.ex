@@ -67,6 +67,7 @@ defmodule StateMachine do
   @type t(m) :: %__MODULE__{
     states: %{optional(atom) => State.t(m)},
     events: list(),
+    after_all_events: list(),
     field:  atom(),
     state_getter: (Context.t(m) -> atom()),
     state_setter: (Context.t(m), atom() -> Context.t(m)),
@@ -75,6 +76,7 @@ defmodule StateMachine do
 
   defstruct states: %{},
     events: [],
+    after_all_events: [],
     field: :state,
     state_getter: &State.get/1,
     state_setter: &State.set/2,

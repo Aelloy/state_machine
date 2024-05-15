@@ -5,6 +5,7 @@ defmodule StateMachine.DSL do
 
   alias StateMachine.{State, Event, Transition, Context, Guard, Introspection}
   import StateMachine.Utils, only: [keyword_splat: 2]
+  require Logger
 
   @doc """
   Creates a main block for a State Machine definition. Compile time checks and validations help
@@ -26,6 +27,7 @@ defmodule StateMachine.DSL do
     * `:event_type` - name for `Ecto.Type` implementation for Event type. Default: `EventType`.
   """
   defmacro defmachine(opts \\ [], block) do
+    Logger.info("here")
     head =
       quote do
         if Keyword.has_key?(unquote(opts), :ecto_type) do
@@ -37,8 +39,10 @@ defmodule StateMachine.DSL do
         end
 
         @after_compile StateMachine.Validation
+        IO.inspect(Module.register_attribute(__MODULE__, :after_all_events, accumulate: true), label: "Module.register_attribute")
         Module.register_attribute(__MODULE__, :states, accumulate: true)
         Module.register_attribute(__MODULE__, :events, accumulate: true)
+        Module.register_attribute(__MODULE__, :after_all_events, accumulate: true)
         Module.put_attribute(__MODULE__, :in_defmachine, true)
         Module.put_attribute(__MODULE__, :field, Keyword.get(unquote(opts), :field, :state))
         Module.put_attribute(__MODULE__, :repo, Keyword.get(unquote(opts), :repo))
@@ -54,6 +58,8 @@ defmodule StateMachine.DSL do
 
         event_names = Enum.map(@events, & &1.name)
         Module.put_attribute(__MODULE__, :event_names, event_names)
+
+        Module.put_attribute(__MODULE__, :global_callbacks, @after_all_events) |> IO.inspect(label: "global_callbacks")
 
         states = @states |> Enum.reverse |> Enum.reduce(%{}, fn state, acc ->
           Map.put(acc, state.name, state)
@@ -79,6 +85,7 @@ defmodule StateMachine.DSL do
           field: unquote(field),
           states: unquote(Macro.escape(states)),
           events: unquote(Macro.escape(events)),
+          after_all_events: unquote(Macro.escape(@after_all_events)),
           state_getter: unquote(Macro.escape(getter)),
           state_setter: unquote(Macro.escape(setter)),
           misc: unquote(Macro.escape(misc))
@@ -302,6 +309,19 @@ defmodule StateMachine.DSL do
     end
   end
 
+    defmacro after_all_events(callbacks \\ [], do: block) do
+      quote do
+        add_global_callbacks(:after_all_events, unquote_splicing(callbacks), unquote(block))
+      end
+    end
+
+  def add_global_callbacks(name, callbacks \\ [], block \\ nil) do
+    callbacks = [@global_callbacks[name] | callbacks]
+    callbacks = Enum.filter(callbacks, &(&1 not in @global_callbacks[name]))
+
+    # @global_callbacks[name] = callbacks ++ [block]
+  end
+
   @doc """
   Experimental macro to generate GenStatem definition. See source...
   """
@@ -326,6 +346,7 @@ defmodule StateMachine.DSL do
       end
 
       def handle_event(kind, {event, payload}, state, model) do
+        IO.inspect([kind, {event, payload}, state, model], label: "handle_event")
         case __MODULE__.trigger(model, event, payload) do
           {:ok, new_model} ->
             context = Context.build(__state_machine__(), new_model)
