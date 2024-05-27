@@ -3,9 +3,8 @@ defmodule StateMachine.DSL do
   These macros help generating State Machine definition in a given Module.
   """
 
-  alias StateMachine.{State, Event, Transition, Context, Guard, Introspection}
+  alias StateMachine.{State, Event, Transition, Context, Guard, Introspection, AfterAllEvents}
   import StateMachine.Utils, only: [keyword_splat: 2]
-  require Logger
 
   @doc """
   Creates a main block for a State Machine definition. Compile time checks and validations help
@@ -25,9 +24,9 @@ defmodule StateMachine.DSL do
       If you state machine is `App.StateMachine`, then `Ecto.Type` implementation will be
       accessible on `App.StateMachine.(state_type)`. Default: `StateType`.
     * `:event_type` - name for `Ecto.Type` implementation for Event type. Default: `EventType`.
+    * `:after_all_events` - a callback function to be run after every event. Default: `nil`.
   """
   defmacro defmachine(opts \\ [], block) do
-    Logger.info("here")
     head =
       quote do
         if Keyword.has_key?(unquote(opts), :ecto_type) do
@@ -39,7 +38,6 @@ defmodule StateMachine.DSL do
         end
 
         @after_compile StateMachine.Validation
-        IO.inspect(Module.register_attribute(__MODULE__, :after_all_events, accumulate: true), label: "Module.register_attribute")
         Module.register_attribute(__MODULE__, :states, accumulate: true)
         Module.register_attribute(__MODULE__, :events, accumulate: true)
         Module.register_attribute(__MODULE__, :after_all_events, accumulate: true)
@@ -59,8 +57,6 @@ defmodule StateMachine.DSL do
         event_names = Enum.map(@events, & &1.name)
         Module.put_attribute(__MODULE__, :event_names, event_names)
 
-        Module.put_attribute(__MODULE__, :global_callbacks, @after_all_events) |> IO.inspect(label: "global_callbacks")
-
         states = @states |> Enum.reverse |> Enum.reduce(%{}, fn state, acc ->
           Map.put(acc, state.name, state)
         end)
@@ -76,6 +72,8 @@ defmodule StateMachine.DSL do
 
         misc = if @repo, do: [repo: @repo], else: []
 
+        after_all_events_callback = @after_all_events
+
         Module.delete_attribute(__MODULE__, :states)
         Module.delete_attribute(__MODULE__, :events)
         Module.delete_attribute(__MODULE__, :field)
@@ -85,10 +83,10 @@ defmodule StateMachine.DSL do
           field: unquote(field),
           states: unquote(Macro.escape(states)),
           events: unquote(Macro.escape(events)),
-          after_all_events: unquote(Macro.escape(@after_all_events)),
           state_getter: unquote(Macro.escape(getter)),
           state_setter: unquote(Macro.escape(setter)),
-          misc: unquote(Macro.escape(misc))
+          misc: unquote(Macro.escape(misc)),
+          after_all_events: unquote(Macro.escape(after_all_events_callback))
         }
 
         introspection_functions()
@@ -276,9 +274,55 @@ defmodule StateMachine.DSL do
       end
 
       def trigger_with_context(model, event, payload \\ nil) do
-        Context.build(__state_machine__(), model)
-        |> Event.trigger(event, payload)
+        context = Context.build(__state_machine__(), model)
+
+        Event.trigger(context, event, payload)
+        |> case do
+          %{status: :failed} = result -> result
+
+          result ->
+            AfterAllEvents.callbacks(context, payload)
+            result
+        end
+
       end
+    end
+  end
+
+  @doc """
+  Defines the `after_all_events` callback function that will be run after every event transition.
+
+  The `after_all_events` macro allows you to specify a callback function that will be executed after all events have been processed. This can be useful for performing actions that should occur regardless of which event was triggered or which transition occurred.
+
+  ## Options
+  * `:run` - A fully qualified function capture that specifies the callback to run after all events. This function will receive the context and the payload as arguments.
+
+  ## Examples
+
+  Here is an example of how to define a state machine with an `after_all_events` callback:
+
+  ```elixir
+  defmodule MyApp.StateMachine do
+    use StateMachine
+
+    defmachine field: :state do
+      state :initial
+      state :final
+
+      event :proceed do
+        transition from: :initial, to: :final
+      end
+
+      after_all_events(run: [&MyApp.some_func/2, &MyApp.some_other_func/2])
+    end
+  end
+  """
+  defmacro after_all_events(fun) do
+    quote do
+      unless Module.get_attribute(__MODULE__, :in_defmachine) do
+        raise CompileError, [file: __ENV__.file, line: __ENV__.line, description: "Calling `after_all_events` outside of state machine definition"]
+      end
+      @after_all_events %AfterAllEvents{run: keyword_splat(unquote(fun), :run)}
     end
   end
 
@@ -309,19 +353,6 @@ defmodule StateMachine.DSL do
     end
   end
 
-    defmacro after_all_events(callbacks \\ [], do: block) do
-      quote do
-        add_global_callbacks(:after_all_events, unquote_splicing(callbacks), unquote(block))
-      end
-    end
-
-  def add_global_callbacks(name, callbacks \\ [], block \\ nil) do
-    callbacks = [@global_callbacks[name] | callbacks]
-    callbacks = Enum.filter(callbacks, &(&1 not in @global_callbacks[name]))
-
-    # @global_callbacks[name] = callbacks ++ [block]
-  end
-
   @doc """
   Experimental macro to generate GenStatem definition. See source...
   """
@@ -346,7 +377,6 @@ defmodule StateMachine.DSL do
       end
 
       def handle_event(kind, {event, payload}, state, model) do
-        IO.inspect([kind, {event, payload}, state, model], label: "handle_event")
         case __MODULE__.trigger(model, event, payload) do
           {:ok, new_model} ->
             context = Context.build(__state_machine__(), new_model)

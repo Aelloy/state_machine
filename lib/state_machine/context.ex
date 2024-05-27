@@ -6,7 +6,7 @@ defmodule StateMachine.Context do
   (but discuraged) manipulate the Context in callbacks.
   """
 
-  alias StateMachine.Transition
+  alias StateMachine.{Transition, AfterAllEvents}
 
   @type t(model) :: %__MODULE__{
     definition: StateMachine.t(model),
@@ -15,6 +15,7 @@ defmodule StateMachine.Context do
     error: any,
     event: atom,
     transition: Transition.t(model) | nil,
+    after_all_events: AfterAllEvents.t(model) | nil,
     payload: any
   }
 
@@ -26,6 +27,7 @@ defmodule StateMachine.Context do
     :error,
     :event,
     :transition,
+    :after_all_events,
     :payload
   ]
 
